@@ -20,23 +20,17 @@ WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds, 60000);
 /*webserver, used to set esp in programming mode */
 ESP8266WebServer server;
-
-
-
 /*
    192.168.3.63 = this board in  this router...
    http://192.168.3.63/restart
  * */
+ /*your mqtt server
 const char* mqtt_server = "192.168.3.220";
 
 
 /*for mqtt*/
 WiFiClient espClient;
 PubSubClient client(espClient);
-
-long lastMsg = 0;
-char msg[50];
-
 /*define sensors*/ 
 #define LED 2 //onboard led of the ESP8266
 #define VALVE 4 //valve through pin 4 (D2) 3.3v relä!
@@ -103,20 +97,6 @@ void setup() {
     delay(5000);
     ESP.restart();
   }
-
-  // Port defaults to 8266
-  // ArduinoOTA.setPort(8266);
-
-  // Hostname defaults to esp8266-[ChipID]
-  // ArduinoOTA.setHostname("myesp8266");
-
-  // No authentication by default
-  // ArduinoOTA.setPassword("admin");
-
-  // Password can be set with it's md5 value as well
-  // MD5(admin) = 21232f297a57a5a743894a0e4a801fc3
-  // ArduinoOTA.setPasswordHash("21232f297a57a5a743894a0e4a801fc3");
-
   ArduinoOTA.onStart([]() {
     String type;
     if (ArduinoOTA.getCommand() == U_FLASH) {
@@ -291,39 +271,4 @@ void loop() {
     server.handleClient();
   }
   /* no need to have something here, if you do it will run every cycle.*/
-  
-
-  /*handle http client */
-  //Serial.println(time_elapsed);
-  //Serial.println(timeClient.getSeconds());
-  //NbTopsFan=0;
-  //sei();
-  //delay(1000);
-  //cli();
-  //calc=(NbTopsFan *60 / 7.5); //(Pulse frequency x 60) / 7.5Q, = flow rate in L/hour 
-  //Serial.print(calc, DEC);
-  //Serial.println("L/hour");
-  //Serial.println(timeClient.getFormattedTime());
-  /* run once every 10 minutes */
-/*  if (timeClient.getHours() < 7) && (timeClient.getHours() > 5) {
-    digitalWrite(LED, HIGH);
-    digitalWrite(VALVE, HIGH);
-  }else{
-      digitalWrite(LED, LOW);
-    digitalWrite(VALVE, LOW);
-  }/*
-  
- /* if (timeClient.getHours() <= 10) {
-    digitalWrite(LED, HIGH);
-    digitalWrite(VALVE, HIGH);
-  } else if (timeClient.getSeconds() <= 30) {
-    digitalWrite(LED, LOW);
-    digitalWrite(VALVE, LOW);
-  } else if (timeClient.getSeconds() <= 40) {
-    digitalWrite(LED, HIGH);
-    digitalWrite(VALVE, HIGH);
-  } else {
-    digitalWrite(LED, LOW);
-    digitalWrite(VALVE, LOW);
-  }*/
 }
