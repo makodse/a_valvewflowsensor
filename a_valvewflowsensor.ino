@@ -56,7 +56,7 @@ unsigned long time_60sec=0;
 unsigned long time_10min=0;
 unsigned long time_60min=0;
 float m3ssincereboot=0;
-float m3perday_last=0;
+float m3perday_last=0; //logically in liters...
 float m3perday=0;
 /*track lastmode variables*/
 int last_flowsensor=0;
@@ -259,12 +259,12 @@ void loop() {
     m3ssincereboot=m3sincereboot+trigger_flow*2.25/1000;
     */
     
-    if(m3perday < (m3perday_last+0.05)){
+    if(m3perday > (m3perday_last+0.05)){
       m3perday_last=m3perday;
      dtostrf(m3perday, 0, 3, res);
-     client.publish("kallarevatten/m3perday", res);
+     client.publish("kallarevatten/L_perday", res);
      dtostrf(m3ssincereboot, 0, 3, res);
-     client.publish("kallarevatten/m3reboot", res);
+     client.publish("kallarevatten/L_reboot", res);
 
     }
     /*watervalve between 6:00- 7:00*/
