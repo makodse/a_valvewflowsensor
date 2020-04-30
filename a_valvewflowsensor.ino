@@ -1,3 +1,4 @@
+/*a_valvewflowsensor - control a valve with a flowsensor, report state and change in flow to mqtt server. /makodse@gmail.com*/
 #include "ota_secret.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
@@ -5,17 +6,19 @@
 #include <ArduinoOTA.h>
 #include <ESP8266WebServer.h>
 #include <NTPClient.h>
-#include <EEPROM.h>
 #include <PubSubClient.h>
 #include <stdlib.h>
 
+
 /*your wifi is setup in ota_secret.h, this is only loading it into the var*/
+/*if downloaded you need to change it and change "ota_secret_example.h" to "ota_secret.h" */
 const char* ssid = STASSID;
 const char* password = STAPSK;
 /* GMT +2*/
 const long utcOffsetInSeconds = 7200;
 /*wifi*/
 WiFiUDP ntpUDP;
+
 /*network time client */
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds, 60000);
 /*webserver, used to set esp in programming mode */
@@ -32,7 +35,6 @@ const char* mqtt_server = "192.168.3.220";
 WiFiClient espClient;
 PubSubClient client(espClient);
 /*define sensors*/ 
-#define LED 2 //onboard led of the ESP8266
 #define VALVE 4 //valve through pin 4 (D2) 3.3v relä!
 #define FLOWSENSOR 5 //flowsensor connected to pin5, D1
 /*
@@ -53,12 +55,16 @@ unsigned long time_10sec=0;
 unsigned long time_60sec=0;
 unsigned long time_10min=0;
 unsigned long time_60min=0;
+float m3ssincereboot=0;
+float m3perday_last=0;
+float m3perday=0;
 /*track lastmode variables*/
 int last_flowsensor=0;
 int tenseconds_flow=0; //calculate the flow over 10 seconds
 bool last_valve=0;
 bool valve_state=0; //keeps track of valve state
-char res[10]; // used to process result
+char res[12]; // used to process result
+String mytime; //string to use as buff for time
 /*count_flowm() interupt function to calculate pulses -> flow*/
 ICACHE_RAM_ATTR void count_flow(){
   trigger_flow++;
@@ -134,9 +140,8 @@ void setup() {
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   /*pinmode settings */
-  //pinMode(LED, OUTPUT);
   pinMode(VALVE, OUTPUT);
-  //pinMode(FLOWSENSOR, INPUT);
+  pinMode(FLOWSENSOR, INPUT);
   /*interrupt to measure flow*/
   attachInterrupt(digitalPinToInterrupt(FLOWSENSOR), count_flow, RISING);
   /*restart on url access for test thnx to ACROBOTIC*/
@@ -203,6 +208,9 @@ void loop() {
     /*calculate the flow based on 10 seconds measure, slow to rise and slow to fall but stable?*/
     //calc=(NbTopsFan *60 / 7.5); //(Pulse frequency x 60) / 7.5Q, = flow rate in L/hour 
     tenseconds_flow=(trigger_flow *60 / 75); //7.5*10 (10 seconds)
+    /*count the m3*/
+    m3perday=m3perday+trigger_flow*2.25/1000;
+    m3ssincereboot=m3ssincereboot+trigger_flow*2.25/1000;
     trigger_flow=0;  
     /*check if last_flowsensor is less than 90% of the new value OR last_flowsensor is greater then 110% of new value = value changed more than 10%  */
     if((last_flowsensor < (tenseconds_flow *0.8)) || (last_flowsensor > (tenseconds_flow *1.2)))
@@ -234,26 +242,49 @@ void loop() {
     //Serial.println(timeClient.getFormattedTime());
   }else if(timepassed - time_60sec >= 60000){
     time_60sec=timepassed;
+    
+    //Serial.println(timeClient.getFormattedTime());
     /*run once every minute*/    
 
   }else if(timepassed - time_10min >= 600000){
     time_10min=timepassed;
     /*run once every 10 minutes*/
+    /*send time to network (for debug)*/
+    mytime=timeClient.getFormattedTime();
+    mytime.toCharArray(res, 10);
+    client.publish("kallarevatten/tid", res);
+    
+    /*check m3*/
+    /*m3perday=m3perday+trigger_flow*2.25/1000;
+    m3ssincereboot=m3sincereboot+trigger_flow*2.25/1000;
+    */
+    
+    if(m3perday < (m3perday_last+0.05)){
+      m3perday_last=m3perday;
+     dtostrf(m3perday, 0, 3, res);
+     client.publish("kallarevatten/m3perday", res);
+     dtostrf(m3ssincereboot, 0, 3, res);
+     client.publish("kallarevatten/m3reboot", res);
+
+    }
     /*watervalve between 6:00- 7:00*/
-    //if ((timeClient.getHours() < 7) && (timeClient.getHours() > 5)) {
-    if ((timeClient.getHours() < 8) && (timeClient.getHours() > 6)) {
+    //if ((timeClient.getHours() < 11) && (timeClient.getHours() > 9)) {
+    if ((timeClient.getHours() < 13) && (timeClient.getHours() > 11)) {
       //low is open...
-      digitalWrite(VALVE, LOW);
+      digitalWrite(VALVE, HIGH);
       valve_state=1;
     }else{
       //high is not open
-      digitalWrite(VALVE, HIGH);
+      digitalWrite(VALVE, LOW);
       valve_state=0;
     }
     /*end watervalve*/  
     }else if(timepassed - time_60min >= 3600000){
     time_60min=timepassed;
     /*run once every 60 minute*/
+    if (timeClient.getHours() == 0){
+      m3perday=0;
+    }
      /*send value as heartbeat*/
      dtostrf(tenseconds_flow, 0, 0, res);
      client.publish("kallarevatten/flow", res);
