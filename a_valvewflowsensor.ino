@@ -24,7 +24,7 @@ ESP8266WebServer server;
    192.168.3.63 = this board in  this router...
    http://192.168.3.63/restart
  * */
- /*your mqtt server
+ /*your mqtt server*/
 const char* mqtt_server = "192.168.3.220";
 
 
@@ -57,6 +57,7 @@ unsigned long time_60min=0;
 int last_flowsensor=0;
 int tenseconds_flow=0; //calculate the flow over 10 seconds
 bool last_valve=0;
+bool valve_state=0; //keeps track of valve state
 char res[10]; // used to process result
 /*count_flowm() interupt function to calculate pulses -> flow*/
 ICACHE_RAM_ATTR void count_flow(){
@@ -202,22 +203,7 @@ void loop() {
     /*calculate the flow based on 10 seconds measure, slow to rise and slow to fall but stable?*/
     //calc=(NbTopsFan *60 / 7.5); //(Pulse frequency x 60) / 7.5Q, = flow rate in L/hour 
     tenseconds_flow=(trigger_flow *60 / 75); //7.5*10 (10 seconds)
-    trigger_flow=0;
-    //Serial.print(tenseconds_flow, DEC);
-    //Serial.println("L/hour");
-    /*evaluate statechanges, report change of 10%*/
-    if (timeClient.getSeconds() < 30) {
-      digitalWrite(VALVE, HIGH);
-      dtostrf(1, 0, 0, res);
-      client.publish("kallarevatten/valve", res);
-    }else{
-      digitalWrite(VALVE, LOW);
-      dtostrf(0, 0, 0, res);
-    client.publish("kallarevatten/valve", res);
-    }
-    //dtostrf(1, 0, 0, res);
-    //client.publish("kallarevatten/valve", res);
-   
+    trigger_flow=0;  
     /*check if last_flowsensor is less than 90% of the new value OR last_flowsensor is greater then 110% of new value = value changed more than 10%  */
     if((last_flowsensor < (tenseconds_flow *0.8)) || (last_flowsensor > (tenseconds_flow *1.2)))
     {
@@ -232,6 +218,11 @@ void loop() {
     }
     /*end check if last_flowsensor*/
     /*check last_valve*/
+    if(last_valve != valve_state){
+          dtostrf(valve_state, 0, 0, res);
+          client.publish("kallarevatten/valve", res);
+          last_valve=valve_state;
+    }
     /*report statechange*/
     /*end check lastvalve*/
     /*end evaluate statechange*/
@@ -249,10 +240,15 @@ void loop() {
     time_10min=timepassed;
     /*run once every 10 minutes*/
     /*watervalve between 6:00- 7:00*/
-    if ((timeClient.getHours() < 7) && (timeClient.getHours() > 5)) {
-      digitalWrite(VALVE, HIGH);
-    }else{
+    //if ((timeClient.getHours() < 7) && (timeClient.getHours() > 5)) {
+    if ((timeClient.getHours() < 8) && (timeClient.getHours() > 6)) {
+      //low is open...
       digitalWrite(VALVE, LOW);
+      valve_state=1;
+    }else{
+      //high is not open
+      digitalWrite(VALVE, HIGH);
+      valve_state=0;
     }
     /*end watervalve*/  
     }else if(timepassed - time_60min >= 3600000){
@@ -261,11 +257,14 @@ void loop() {
      /*send value as heartbeat*/
      dtostrf(tenseconds_flow, 0, 0, res);
      client.publish("kallarevatten/flow", res);
+     /* valve last known state */
+     dtostrf(valve_state, 0, 0, res);
+     client.publish("kallarevatten/valve", res);
      /*end send value as hartbeat*/
     /*TODO: if no statechange, when do i report?, heartbeat?*/
     /*update ntp client*/
     timeClient.update();
-    /*end update ntp client*/
+    /*e nd update ntp client*/
   }else{
     /*no timed actions, run once every cycle that nothing else is done*/
     server.handleClient();
